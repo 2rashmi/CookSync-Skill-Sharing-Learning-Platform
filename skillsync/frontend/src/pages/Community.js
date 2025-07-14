@@ -18,7 +18,9 @@ import {
   Alert,
   Snackbar,
   Button,
-  CardMedia
+  TextField,
+  InputAdornment,
+  IconButton
 } from '@mui/material';
 import axios from 'axios';
 import PostInteraction from '../components/PostInteraction';
@@ -31,6 +33,8 @@ import PersonRemoveIcon from '@mui/icons-material/PersonRemove';
 import { useAuth } from '../contexts/AuthContext';
 import LockIcon from '@mui/icons-material/Lock';
 import UserSearch from '../components/UserSearch';
+import SearchIcon from '@mui/icons-material/Search';
+import CloseIcon from '@mui/icons-material/Close';
 
 const Community = () => {
   const navigate = useNavigate();
@@ -52,21 +56,23 @@ const Community = () => {
   const [snackbarMessage, setSnackbarMessage] = useState('');
   const [snackbarSeverity, setSnackbarSeverity] = useState('error');
   const [followStatus, setFollowStatus] = useState({});
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchTimeout, setSearchTimeout] = useState(null);
   
   const { ref, inView } = useInView({
     threshold: 0,
   });
 
   const categories = [
-    'all',
-    'breakfast',
-    'lunch',
-    'dinner',
-    'dessert',
-    'snacks',
-    'vegetarian',
-    'vegan',
-    'gluten-free'
+    { id: 'all', label: 'All Posts', icon: '🌐', color: 'primary' },
+    { id: 'breakfast', label: 'Breakfast', icon: '🍳', color: 'warning' },
+    { id: 'lunch', label: 'Lunch', icon: '🥪', color: 'success' },
+    { id: 'dinner', label: 'Dinner', icon: '🍽', color: 'error' },
+    { id: 'dessert', label: 'Dessert', icon: '🍰', color: 'secondary' },
+    { id: 'snacks', label: 'Snacks', icon: '🥨', color: 'info' },
+    { id: 'vegetarian', label: 'Vegetarian', icon: '🥗', color: 'success' },
+    { id: 'vegan', label: 'Vegan', icon: '🌱', color: 'success' },
+    { id: 'gluten-free', label: 'Gluten Free', icon: '🌾', color: 'warning' }
   ];
 
   const showError = (message) => {
@@ -266,135 +272,230 @@ const Community = () => {
     });
   }, [posts, followingPosts, user, activeTab]);
 
-  const renderPost = (post) => {
-    // Get a timestamp for cache-busting and debugging
-    const timestamp = Date.now();
-    const hasUserPicture = Boolean(post.userPicture);
+  const filteredPosts = posts.filter(post => {
+    const searchLower = searchQuery.toLowerCase();
+    const descriptionLower = post.description?.toLowerCase() || '';
+    const titleLower = post.title?.toLowerCase() || '';
     
-    return (
-      <Card key={post.id} sx={{ mb: 3, borderRadius: 2, boxShadow: 2 }}>
-        <CardContent>
-          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-            <Avatar
-              alt={post.userName || 'User'}
-              src={post.userPicture ? `${post.userPicture}?t=${timestamp}` : '/default-avatar.svg'}
+    // Check if the search query matches username
+    const matchesSearch = post.userName.toLowerCase().includes(searchLower);
+    
+    // Check if the category matches in title, description, or category field
+    const matchesCategory = selectedCategory === 'all' || 
+      (selectedCategory !== 'all' && (
+        titleLower.includes(selectedCategory.toLowerCase()) ||
+        descriptionLower.includes(selectedCategory.toLowerCase()) ||
+        post.category?.toLowerCase() === selectedCategory.toLowerCase()
+      ));
+    
+    return matchesSearch && matchesCategory;
+  });
+
+  const filteredFollowingPosts = followingPosts.filter(post => {
+    const searchLower = searchQuery.toLowerCase();
+    const descriptionLower = post.description?.toLowerCase() || '';
+    const titleLower = post.title?.toLowerCase() || '';
+    
+    // Check if the search query matches username
+    const matchesSearch = post.userName.toLowerCase().includes(searchLower);
+    
+    // Check if the category matches in title, description, or category field
+    const matchesCategory = selectedCategory === 'all' || 
+      (selectedCategory !== 'all' && (
+        titleLower.includes(selectedCategory.toLowerCase()) ||
+        descriptionLower.includes(selectedCategory.toLowerCase()) ||
+        post.category?.toLowerCase() === selectedCategory.toLowerCase()
+      ));
+    
+    return matchesSearch && matchesCategory;
+  });
+
+  const handleSearchChange = (event) => {
+    const value = event.target.value;
+    setSearchQuery(value);
+    
+    // Clear any existing timeout
+    if (searchTimeout) {
+      clearTimeout(searchTimeout);
+    }
+    
+    // Set a new timeout to debounce the search
+    const timeout = setTimeout(() => {
+      if (activeTab === 0) {
+        fetchPosts();
+      } else {
+        fetchFollowingPosts();
+      }
+    }, 300);
+    
+    setSearchTimeout(timeout);
+  };
+
+  const renderPost = (post) => (
+    <Card key={post.id} sx={{ mb: 3, borderRadius: 2, boxShadow: 2 }}>
+      <CardContent>
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+          <Avatar
+            alt={post.userName}
+            src={post.userPicture}
+            sx={{ 
+              mr: 2, 
+              cursor: 'pointer',
+              width: 48,
+              height: 48,
+              bgcolor: post.userPicture ? 'transparent' : 'primary.main',
+              '&:hover': {
+                transform: 'scale(1.05)',
+                transition: 'transform 0.2s ease-in-out'
+              }
+            }}
+            onClick={() => navigate(`/users/${post.userId}`)}
+          >
+            {!post.userPicture && post.userName?.charAt(0).toUpperCase()}
+          </Avatar>
+          <Box sx={{ flex: 1 }}>
+            <Typography 
+              variant="subtitle1" 
               sx={{ 
-                mr: 2, 
                 cursor: 'pointer',
-                width: 48,
-                height: 48,
-                bgcolor: theme.palette.primary.main,
+                fontWeight: 600,
                 '&:hover': {
-                  transform: 'scale(1.05)',
-                  transition: 'transform 0.2s ease-in-out'
+                  color: 'primary.main'
                 }
               }}
               onClick={() => navigate(`/users/${post.userId}`)}
-              imgProps={{
-                onError: (e) => {
-                  e.target.src = '/default-avatar.svg';
-                  console.log('Image load error in Community for', post.userName);
-                },
-                'data-has-picture': hasUserPicture.toString()
-              }}
             >
-              {(!post.userPicture || post.userPicture === '/default-avatar.svg') && post.userName?.charAt(0).toUpperCase()}
-            </Avatar>
-            <Box sx={{ flex: 1 }}>
-              <Typography 
-                variant="subtitle1" 
-                sx={{ 
-                  cursor: 'pointer',
-                  fontWeight: 600,
-                  '&:hover': {
-                    color: 'primary.main'
-                  }
-                }}
-                onClick={() => navigate(`/users/${post.userId}`)}
-              >
-                {post.userName || 'Anonymous User'}
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                {formatDistanceToNow(new Date(post.createdAt), { addSuffix: true })}
-              </Typography>
-            </Box>
-            {user && user.sub !== post.userId && (
-              <Button
-                variant="outlined"
-                size="small"
-                color={followStatus[post.userId] ? "error" : "primary"}
-                startIcon={followStatus[post.userId] ? <PersonRemoveIcon /> : <PersonAddIcon />}
-                onClick={() => followStatus[post.userId] ? handleUnfollow(post.userId) : handleFollow(post.userId)}
-                sx={{ ml: 2 }}
-              >
-                {followStatus[post.userId] ? "Unfollow" : "Follow"}
-              </Button>
-            )}
+              {post.userName}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              {formatDistanceToNow(new Date(post.createdAt), { addSuffix: true })}
+            </Typography>
           </Box>
-          
-          <Typography variant="h6" gutterBottom>
-            {post.title}
-          </Typography>
-          
-          <Typography variant="body1" paragraph>
-            {post.description}
-          </Typography>
-          
-          {post.mediaUrls && post.mediaUrls.length > 0 && (
-            <Box sx={{ mt: 2, mb: 2 }}>
-              {post.mediaType === 'image' ? (
-                <img
-                  src={post.mediaUrls[0]}
-                  alt={post.title}
-                  style={{ 
-                    maxWidth: '100%', 
-                    borderRadius: '8px',
-                    maxHeight: '500px',
-                    objectFit: 'cover'
-                  }}
-                />
-              ) : post.mediaType === 'video' ? (
-                <video
-                  controls
-                  style={{ 
-                    maxWidth: '100%', 
-                    borderRadius: '8px',
-                    maxHeight: '500px'
-                  }}
-                >
-                  <source src={post.mediaUrls[0]} type="video/mp4" />
-                  Your browser does not support the video tag.
-                </video>
-              ) : null}
-            </Box>
+          {user && user.sub !== post.userId && (
+            <Button
+              variant="outlined"
+              size="small"
+              color={followStatus[post.userId] ? "error" : "primary"}
+              startIcon={followStatus[post.userId] ? <PersonRemoveIcon /> : <PersonAddIcon />}
+              onClick={() => followStatus[post.userId] ? handleUnfollow(post.userId) : handleFollow(post.userId)}
+              sx={{ ml: 2 }}
+            >
+              {followStatus[post.userId] ? "Unfollow" : "Follow"}
+            </Button>
           )}
-          
-          {post.ingredients && post.ingredients.length > 0 && (
-            <Box sx={{ mt: 2 }}>
-              <Typography variant="subtitle2" gutterBottom>
-                Ingredients:
-              </Typography>
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                {post.ingredients.map((ingredient, index) => (
-                  <Chip
-                    key={index}
-                    label={`${ingredient}${post.amounts ? ` - ${post.amounts[index]}` : ''}`}
-                    size="small"
-                    variant="outlined"
-                  />
-                ))}
-              </Box>
-            </Box>
-          )}
-        </CardContent>
+        </Box>
         
-        <PostInteraction 
-          post={post} 
-          onUpdate={handlePostUpdate}
-        />
-      </Card>
-    );
-  };
+        <Typography variant="h6" gutterBottom>
+          {post.title}
+        </Typography>
+        
+        <Typography variant="body1" paragraph>
+          {post.description}
+        </Typography>
+        
+        {post.mediaUrls && post.mediaUrls.length > 0 && (
+          <Box sx={{ mt: 2, mb: 2 }}>
+            <Grid container spacing={1}>
+              {post.mediaUrls.map((url, index) => {
+                const isVideo = url.match(/\.(mp4|webm|ogg)$/i);
+                return (
+                  <Grid item xs={12} sm={6} md={4} key={index}>
+                    {!isVideo ? (
+                      <img
+                        src={url}
+                        alt={`${post.title} - Image ${index + 1}`}
+                        style={{ 
+                          width: '100%',
+                          height: '200px',
+                          objectFit: 'cover',
+                          borderRadius: '8px'
+                        }}
+                        onError={(e) => {
+                          console.error('Error loading image:', url);
+                          e.target.src = '/placeholder-image.jpg';
+                        }}
+                      />
+                    ) : (
+                      <video
+                        controls
+                        style={{ 
+                          width: '100%',
+                          height: '200px',
+                          objectFit: 'cover',
+                          borderRadius: '8px'
+                        }}
+                      >
+                        <source src={url} type="video/mp4" />
+                        Your browser does not support the video tag.
+                      </video>
+                    )}
+                  </Grid>
+                );
+              })}
+            </Grid>
+          </Box>
+        )}
+        
+        {post.ingredients && post.ingredients.length > 0 && (
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="subtitle2" gutterBottom>
+              Ingredients:
+            </Typography>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+              {post.ingredients.map((ingredient, index) => (
+                <Chip
+                  key={index}
+                  label={post.amounts && post.amounts[index] ? 
+                    `${ingredient} - ${post.amounts[index]}` : 
+                    ingredient}
+                  size="small"
+                  variant="outlined"
+                />
+              ))}
+            </Box>
+          </Box>
+        )}
+
+        {post.instructions && post.instructions.length > 0 && (
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="subtitle2" gutterBottom>
+              Instructions:
+            </Typography>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              {post.instructions.map((instruction, index) => (
+                <Box key={index} sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+                  <Typography 
+                    variant="body2" 
+                    sx={{ 
+                      minWidth: '24px',
+                      height: '24px',
+                      borderRadius: '50%',
+                      backgroundColor: 'primary.main',
+                      color: 'white',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '0.875rem'
+                    }}
+                  >
+                    {index + 1}
+                  </Typography>
+                  <Typography variant="body2">
+                    {instruction}
+                  </Typography>
+                </Box>
+              ))}
+            </Box>
+          </Box>
+        )}
+      </CardContent>
+      
+      <PostInteraction 
+        post={post} 
+        onUpdate={handlePostUpdate}
+      />
+    </Card>
+  );
 
   const handleNoPostsMessage = () => {
     if (activeTab === 0) {
@@ -425,11 +526,28 @@ const Community = () => {
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                 {categories.map((category) => (
                   <Chip
-                    key={category}
-                    label={category.charAt(0).toUpperCase() + category.slice(1)}
-                    onClick={() => handleCategoryChange(category)}
-                    color={selectedCategory === category ? 'primary' : 'default'}
-                    variant={selectedCategory === category ? 'filled' : 'outlined'}
+                    key={category.id}
+                    label={
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <span>{category.icon}</span>
+                        <span>{category.label}</span>
+                      </Box>
+                    }
+                    onClick={() => handleCategoryChange(category.id)}
+                    color={selectedCategory === category.id ? category.color : 'default'}
+                    variant={selectedCategory === category.id ? 'filled' : 'outlined'}
+                    sx={{
+                      justifyContent: 'flex-start',
+                      '&:hover': {
+                        backgroundColor: selectedCategory === category.id ? `${category.color}.main` : 'action.hover',
+                        color: selectedCategory === category.id ? 'white' : 'inherit',
+                      },
+                      transition: 'all 0.2s ease-in-out',
+                      borderColor: selectedCategory === category.id ? `${category.color}.main` : 'inherit',
+                      '& .MuiChip-label': {
+                        width: '100%',
+                      }
+                    }}
                   />
                 ))}
               </Box>
@@ -437,64 +555,137 @@ const Community = () => {
           </Grid>
         )}
 
+        {/* Mobile Categories */}
+        {isMobile && (
+          <Box sx={{ mb: 3, overflowX: 'auto', whiteSpace: 'nowrap', WebkitOverflowScrolling: 'touch' }}>
+            <Box sx={{ display: 'inline-flex', gap: 1, pb: 1, px: 1 }}>
+              {categories.map((category) => (
+                <Chip
+                  key={category.id}
+                  label={
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <span>{category.icon}</span>
+                      <span>{category.label}</span>
+                    </Box>
+                  }
+                  onClick={() => handleCategoryChange(category.id)}
+                  color={selectedCategory === category.id ? category.color : 'default'}
+                  variant={selectedCategory === category.id ? 'filled' : 'outlined'}
+                  sx={{
+                    '&:hover': {
+                      backgroundColor: selectedCategory === category.id ? `${category.color}.main` : 'action.hover',
+                      color: selectedCategory === category.id ? 'white' : 'inherit',
+                    },
+                    transition: 'all 0.2s ease-in-out',
+                    borderColor: selectedCategory === category.id ? `${category.color}.main` : 'inherit',
+                    '& .MuiChip-label': {
+                      width: '100%',
+                    }
+                  }}
+                />
+              ))}
+            </Box>
+          </Box>
+        )}
+
         {/* Main Content */}
-        <Grid item xs={12} md={isMobile ? 12 : 6}>
+        <Grid item xs={12} md={6}>
+          <Paper sx={{ p: 3, display: 'flex', flexDirection: 'column' }}>
+            <Typography variant="h4" gutterBottom>
+              Cooking Community
+            </Typography>
+            <Typography variant="body1" color="text.secondary" paragraph>
+              Connect with fellow cooking enthusiasts and share your culinary experiences
+            </Typography>
+            
             <Tabs
               value={activeTab}
-            onChange={(e, newValue) => setActiveTab(newValue)}
+              onChange={handleTabChange}
               sx={{ mb: 3 }}
             >
-            <Tab label="Posts" />
-    <Tab label="Following" />
-    <Tab label="Search Users" />
-  </Tabs>
-  
-{activeTab === 0 && (
-  // Posts tab content
-  <Box>
-    {posts.length > 0 ? (
-      <Grid container spacing={3}>
-        {posts.map((post) => (
-          <Grid item xs={12} key={post.id}>
-            <Post post={post} onUpdate={fetchPosts} />
-          </Grid>
-        ))}
-      </Grid>
-    ) : (
-      <Paper elevation={3} sx={{ p: 3, textAlign: 'center' }}>
-        <Typography variant="h6" color="text.secondary">
-          {handleNoPostsMessage()}
-        </Typography>
-      </Paper>
-    )}
-        </Box>
-      )}
-
-          {activeTab === 1 && (
-            // Following tab content
-            <Box>
-              {followingPosts.length > 0 ? (
-                <Grid container spacing={3}>
-                  {followingPosts.map((post) => (
-                    <Grid item xs={12} key={post.id}>
-                      <Post post={post} onUpdate={fetchFollowingPosts} />
-                    </Grid>
-                  ))}
-                </Grid>
-              ) : (
-                <Paper elevation={3} sx={{ p: 3, textAlign: 'center' }}>
-                  <Typography variant="h6" color="text.secondary">
-                  {handleNoPostsMessage()}
-                </Typography>
-                </Paper>
-                )}
-              </Box>
+              <Tab label="For You" />
+              <Tab label="Following" />
+              <Tab label="Search Users" />
+            </Tabs>
+            
+            {activeTab !== 2 && (
+              <TextField
+                fullWidth
+                variant="outlined"
+                placeholder="Search by username..."
+                value={searchQuery}
+                onChange={handleSearchChange}
+                sx={{ mb: 3 }}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon color="action" />
+                    </InputAdornment>
+                  ),
+                  endAdornment: searchQuery && (
+                    <InputAdornment position="end">
+                      <IconButton
+                        size="small"
+                        onClick={() => {
+                          setSearchQuery('');
+                          if (activeTab === 0) {
+                            fetchPosts();
+                          } else {
+                            fetchFollowingPosts();
+                          }
+                        }}
+                      >
+                        <CloseIcon fontSize="small" />
+                      </IconButton>
+                    </InputAdornment>
+                  )
+                }}
+              />
             )}
-
-          {activeTab === 2 && (
-            // Search Users tab content
-            <UserSearch />
-          )}
+            
+            <Divider sx={{ mb: 3 }} />
+            
+            {error && (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                {error}
+                <Button 
+                  color="inherit" 
+                  size="small" 
+                  onClick={() => {
+                    setError(null);
+                    activeTab === 0 ? fetchPosts() : fetchFollowingPosts();
+                  }}
+                >
+                  Retry
+                </Button>
+              </Alert>
+            )}
+            
+            {loading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                <CircularProgress />
+              </Box>
+            ) : activeTab === 2 ? (
+              <UserSearch />
+            ) : (activeTab === 0 ? filteredPosts : filteredFollowingPosts).length > 0 ? (
+              <>
+                {(activeTab === 0 ? filteredPosts : filteredFollowingPosts).map(renderPost)}
+                {activeTab === 0 && hasMore && (
+                  <Box ref={ref} sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                    {loadingMore ? <CircularProgress /> : null}
+                  </Box>
+                )}
+              </>
+            ) : (
+              <Typography align="center" color="text.secondary">
+                {searchQuery 
+                  ? 'No posts found matching your search'
+                  : activeTab === 0 
+                    ? 'No posts yet. Be the first to share!'
+                    : 'No posts from followed users yet. Follow some users to see their posts here!'}
+              </Typography>
+            )}
+          </Paper>
         </Grid>
 
         {/* Right Sidebar - Trending Posts */}
@@ -504,34 +695,18 @@ const Community = () => {
               <Typography variant="h6" gutterBottom>
                 Trending Posts
               </Typography>
-              {trendingPosts.length > 0 ? (
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               {trendingPosts.map((post) => (
-                    <Card key={post.id} sx={{ cursor: 'pointer' }} onClick={() => handleNavigateToPost(post.id)}>
-                      {post.mediaUrls && post.mediaUrls.length > 0 && (
-                        <CardMedia
-                          component="img"
-                          height="140"
-                          image={post.mediaUrls[0]}
-                          alt={post.title}
-                        />
-                      )}
-                      <CardContent>
-                        <Typography variant="subtitle1" noWrap>
+                <Card key={post.id} sx={{ mb: 2, cursor: 'pointer' }} onClick={() => navigate(`/posts/${post.id}`)}>
+                  <CardContent sx={{ p: 2 }}>
+                    <Typography variant="subtitle2" noWrap>
                       {post.title}
                     </Typography>
-                        <Typography variant="body2" color="text.secondary" noWrap>
-                          {post.description}
+                    <Typography variant="caption" color="text.secondary">
+                      {post.likes} likes • {post.comments} comments
                     </Typography>
                   </CardContent>
                 </Card>
               ))}
-                </Box>
-              ) : (
-                <Typography variant="body2" color="text.secondary">
-                  No trending posts yet
-                </Typography>
-              )}
             </Paper>
           </Grid>
         )}
